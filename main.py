@@ -7,38 +7,97 @@ from pybricks.tools import wait, StopWatch, DataLog
 from pybricks.robotics import DriveBase
 from pybricks.media.ev3dev import SoundFile, ImageFile
 
-
-# This program requires LEGO EV3 MicroPython v2.0 or higher.
-# Click "Open user guide" on the EV3 extension tab for more information.
-
-
+# Create your objects here.
 ev3 = EV3Brick()
-left_wheel = Motor(Port.D)
-right_wheel = Motor(Port.A)
 
-left_sensor = ColorSensor(Port.S2)
-right_sensor = ColorSensor(Port.S3)
+# Initialize the color sensors on ports 1 and 4
+left_sensor = ColorSensor(Port.S1)
+right_sensor = ColorSensor(Port.S4)
+#left_touch_sensor = TouchSensor(Port.S2)
+#right_touch_sensor = TouchSensor(Port.S3)
+ultrasonic_sensor = UltrasonicSensor(Port.S3)  # Change the port to the one you are using
 
-robot = DriveBase(left_wheel, right_wheel,wheel_diameter=55,axle_track = 126)
-speed = 65
-turnproportion = 3
-# Write your program here.
+# Initialize the motors on ports B and C
+left_motor = Motor(Port.D)
+right_motor = Motor(Port.A)
+
+# Create a DriveBase instance for controlling the motors
+drive_base = DriveBase(left_motor, right_motor, wheel_diameter=55.5, axle_track=104)
+
+# Set the proportional steering constant
+proportional_constant = 1.1
+
+# Set the base speed and turn rate
+base_speed = 80
+turn_rate = 2.5
+
+# Main loop
 while True:
-    left_intensity = left_sensor.reflection()
-    right_intensity = right_sensor.reflection()
+    # Flag to keep track of T-junction encounter
+    t_junction_encountered = False
+
+    p = left_sensor.reflection() - right_sensor.reflection()
+
+    # Update the EV3 brick display
+    ev3.screen.clear()
+    ev3.screen.print("error: {}".format(p))
+
+    # Calculate the error for proportional steering
+    error = (left_sensor.reflection() - right_sensor.reflection())
+
+    # Detect objects using ultrasonic sensor
+    if ultrasonic_sensor.distance() < 140:  # Change the distance threshold as needed
+        drive_base.drive(0, 0)  # Stop the robot if an object is detected
+        ev3.speaker.play_file(SoundFile.ERROR)
+        drive_base.turn(-98)
+        while left_sensor.reflection() > 15:
+            drive_base.drive(base_speed, 21)
+
+    # Calculate the turn rate based on the error
+    if error in range(-25, 25):
+        if left_sensor.reflection() < 15 and right_sensor.reflection() < 15 and not t_junction_encountered:
+            drive_base.drive(0, 0)    
+            ev3.screen.print("Choose direction:")
+            ev3.screen.print("1. Left")
+            ev3.screen.print("2. Right")
+            ev3.screen.print("3. Forward")
+            ev3.speaker.play_file(SoundFile.CONFIRM)
+            while True:
+                buttons = ev3.buttons.pressed()
+                if Button.LEFT in buttons:
+                    ev3.speaker.beep()
+                    ev3.screen.clear()
+                    ev3.screen.print("Turning Left")
+                    drive_base.turn(80)
+                    wait(500)
+                    t_junction_encountered = True
+                    break
+                elif Button.RIGHT in buttons:
+                    ev3.speaker.beep()
+                    ev3.screen.clear()
+                    ev3.screen.print("Turning Right")
+                    drive_base.turn(-80)
+                    wait(500)
+                    t_junction_encountered = True
+                    break
+                elif Button.UP in buttons:
+                    ev3.speaker.beep()
+                    ev3.screen.clear()
+                    ev3.screen.print("Moving Forward")
+                    drive_base.drive(base_speed, 0)
+                    wait(100)
+                    t_junction_encountered = True
+                    break
+        error = 0
+
+    turn = turn_rate * error * proportional_constant
+
+    # Drive the robot using the base speed and turn rate
+    drive_base.drive(base_speed, turn)
+
+    # Wait for a moment before the next iteration
+    wait(10)
     
-    if left_intensity > 93 & right_intensity > 93:
-        robot.drive(speed,0)
-       
-    if right_intensity < 94:
-        rightdeviation = 86 - right_intensity
-        turn_rate = turnproportion * rightdeviation
-        robot.drive(speed,turn_rate)
-    elif left_intensity < 90:
-        leftdeviation = 86 - left_intensity
-        turn_rate = -turnproportion * leftdeviation
-        robot.drive(speed,turn_rate)
-    else:
-        robot.drive(speed,0)        
+
 
     
